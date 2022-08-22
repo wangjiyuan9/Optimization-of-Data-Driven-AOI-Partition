@@ -1,5 +1,5 @@
 import sys
-from pg_learning import PGLearning
+from pg_thread import PGThread
 from PySide6.QtWidgets import QApplication
 from grid_world import GridWorld
 
@@ -20,7 +20,7 @@ def show_world():
 
     world.show()
 
-    learn_thread = PGLearning(world.aoi_update)
+    learn_thread = PGThread(world.aoi_update)
     learn_thread.start()
 
     sys.exit(app.exec())
