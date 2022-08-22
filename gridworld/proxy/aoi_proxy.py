@@ -5,7 +5,7 @@ import numpy as np
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QPixmap, QImage
 
-from utils.color_set import ColorSet
+from gridworld.utils.color_set import ColorSet
 from tqdm import trange
 import time
 

@@ -2,11 +2,10 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QImage
 import numpy as np
 
-from proxy.aoi_proxy import AOIProxy
-from proxy.trace_proxy import TraceInfo, TraceProxy
-from proxy.parcel_proxy import ParcelsInfo, ParcelProxy
-from utils.txt_reader import TxtReader
-from utils.color_set import ColorSet
+from gridworld.proxy.aoi_proxy import AOIProxy
+from gridworld.proxy.trace_proxy import TraceInfo, TraceProxy
+from gridworld.proxy.parcel_proxy import ParcelsInfo, ParcelProxy
+from gridworld.utils.txt_reader import TxtReader
 
 
 class DataDeputy:

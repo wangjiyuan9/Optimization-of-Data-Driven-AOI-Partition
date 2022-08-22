@@ -5,11 +5,11 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 import warnings
 
-from deputy.layout_deputy import LayoutDeputy, GeographyInfo
-from deputy.menu_deputy import MenuDeputy
-from deputy.data_deputy import DataDeputy
-from deputy.render_deputy import RenderDeputy
-from utils.custom_2d import *
+from gridworld.deputy.layout_deputy import LayoutDeputy, GeographyInfo
+from gridworld.deputy.menu_deputy import MenuDeputy
+from gridworld.deputy.data_deputy import DataDeputy
+from gridworld.deputy.render_deputy import RenderDeputy
+from gridworld.utils.custom_2d import *
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

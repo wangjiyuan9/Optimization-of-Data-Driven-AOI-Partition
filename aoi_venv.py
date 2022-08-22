@@ -6,7 +6,7 @@ import os
 current_path = os.path.dirname(__file__)
 
 
-class area1():
+class AOIVirtualEnv:
     def __init__(self, config):
         self.config = config
         self.w, self.h = config.w, config.h

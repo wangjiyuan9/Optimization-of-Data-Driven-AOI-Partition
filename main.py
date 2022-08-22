@@ -1,10 +1,10 @@
 import sys
-from pg_thread import PGThread
+from update_thread import UpdateThread
 from PySide6.QtWidgets import QApplication
-from grid_world import GridWorld
+from gridworld.grid_world import GridWorld
+from pg_learning import PolicyGradientRL
 
-
-def show_world():
+if __name__ == '__main__':
     app = QApplication([])
     world = GridWorld()
 
@@ -18,13 +18,13 @@ def show_world():
     world.render_deputy.trace_indexes = indexes
     world.render_deputy.parcels_indexes = indexes
 
+    """配置aoi强化学习"""
+    aoi_learning = PolicyGradientRL()
+
+    """绑定并启动aoi学习线程"""
+    aoi_thread = UpdateThread(runner=aoi_learning.execute, slot=world.aoi_update)
+    aoi_thread.start()
+
+    """主进程进入事件循环"""
     world.show()
-
-    learn_thread = PGThread(world.aoi_update)
-    learn_thread.start()
-
     sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    show_world()

@@ -1,7 +1,7 @@
 from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
-from utils.float_tooltip import FloatTooltip, TipAnchor
+from gridworld.utils.float_tooltip import FloatTooltip, TipAnchor
 
 
 class MenuDeputy:

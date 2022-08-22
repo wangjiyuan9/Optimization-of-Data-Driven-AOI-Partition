@@ -1,86 +1,148 @@
+import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
+from itertools import count
+from matplotlib import pyplot as plt
+
+from aoi_venv import AOIVirtualEnv
+from aoi_agent import AOIAgent
 
 
-class RLLoss(nn.Module):
+class Config:
     def __init__(self):
-        super().__init__()
+        # 运行
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.seed = 10
+        self.save_param = 'AOI_divide1_1.pth'
+        self.init_param = None
+        self.name = 'AOI_divide1'
+        self.train = True
+        self.test = True
 
-    def forward(self, probs, rewards):
-        return -torch.sum(torch.log(probs) * rewards)
+        # 训练
+        self.batch_size = 8
+        self.tra_eps = 80
+        self.max_iter = 400
+        # 智能体
+        self.gamma = 0.8
+        self.lr = 0.1
+        self.hidden_dim = 64
+        # 环境
+        self.h = 100
+        self.w = 100
+        self.threshold = 5
 
 
-class MLP(nn.Module):
-    def __init__(self, config):
-        super(MLP, self).__init__()
-        input_dim, output_dim, hidden_dim = config.h * config.w, 2 + 5, config.hidden_dim
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
+class PolicyGradientRL:
+    def __init__(self):
+        self.signal = None
+        self.config = Config()
+        self.agent = AOIAgent(self.config)
+        self.env = AOIVirtualEnv(self.config)
+        self.config.w = self.env.w
+        self.config.h = self.env.h
 
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.softmax(self.fc2(x), dim=0)  # 映射到0-1的区间
-        return x
+        torch.manual_seed(self.config.seed)
+        if self.config.device == 'cuda':
+            torch.cuda.manual_seed(self.config.seed)
 
+        # 创建保存模型文件夹
+        if not os.path.exists('./save_model'):
+            os.makedirs('./save_model')
+            os.makedirs(os.path.join('./save_model/', self.config.name))
+            self.config.save_model = os.path.join('./save_model/', self.config.name)
 
-class PolicyGradient():
-    def __init__(self, config):
-        # 载入初始参数
-        self.gamma = config.gamma
-        self.device = config.device
-        self.net = MLP(config).to(self.device)
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=config.lr)
-        self.loss_fun = RLLoss()
-        self.max_iter = config.max_iter
+        # 更改载入模型、储存模型路径
+        if self.config.init_param:
+            self.config.init_param = os.path.join('./save_model/', self.config.name, self.config.init_param)
+        if self.config.save_param:
+            self.config.save_param = os.path.join('./save_model/', self.config.name, self.config.save_param)
 
-        self.h = config.h
-        self.w = config.w
+    def execute(self, signal=None):
+        """
+        执行起点，由线程调用
+        相当于之前的 main
+        """
+        self.signal = signal
+        print('using ', self.config.device)
+        if self.config.train:
+            rewards, ma_rewards = self.train()
+            self.plot_rewards(rewards, ma_rewards)
 
-    def choose_action(self, state):
-        state = torch.from_numpy(state).to(self.device, dtype=torch.float32)
-        action_net = self.net(state)
-        probs = action_net[2:]
-        action = torch.zeros([1, 3], dtype=torch.int)
-        action_xy = action_net[:2]
-        # prob, action= torch.max(probs) # 示例代码里不是这样，是按照概率选取
-        action_policy = torch.multinomial(probs, num_samples=1, replacement=False)
-        prob = probs[action_policy]
-        action[0, :2] = action_xy
-        action[0, -1] = action_policy
-        # logp = prob.log()
-        return action, prob
+        if self.config.test:
+            self.test()
 
-    def update(self, prob_pool, reward_pool):  # ,flag_pool
-        # 计算回报
-        reward_current = 0.
-        for i in reversed(range(len(reward_pool))):
-            '''if flag_pool[i]==True: #回合结束标志
-                reward_current = reward_pool[i]'''
-            reward_current = reward_current * self.gamma + reward_pool[i]
-            reward_pool[i] = reward_current
-            if i % self.max_iter == 0:
-                reward_current = 0.
+    def train(self):
+        state_pool, action_pool, prob_pool, reward_pool = [], [], [], []
+        rewards, ma_rewards = [], []
+        # 循环epoch个回合
+        for epoch in range(self.config.tra_eps):
+            # 开始训练
+            state = self.env.reset()
+            ep_reward, best_reward = 0, 0
+            for iter in range(self.config.max_iter):
+                state = np.reshape(state, (self.config.h * self.config.w))
+                if self.signal and iter % 50 == 0:
+                    self.signal.emit(state.reshape([100, 100]))
+                action, prob = self.agent.choose_action(state)
+                nxt_state, reward = self.env.step(action)
+                prob_pool.append(prob)
+                reward_pool.append(reward)  # state_pool.append(state); action_pool.append(action);
+                state = nxt_state
+                ep_reward += reward
+                best_reward = max(best_reward, reward)
 
-        # 标准化回报
-        prob_pool = torch.tensor(prob_pool, dtype=torch.float32, device=self.device)
-        reward_pool = torch.tensor(reward_pool, dtype=torch.float32, device=self.device)
-        reward_pool = (reward_pool - torch.mean(reward_pool)) / torch.std(reward_pool)
+            print('epoch{},reward:{},best_reward:{}'.format(epoch, ep_reward, best_reward))
+            rewards.append(ep_reward)
+            if ma_rewards:
+                ma_rewards.append(0.9 * ma_rewards[-1] + 0.1 * ep_reward)
+            else:
+                ma_rewards.append(ep_reward)
 
-        # 计算loss
-        '''for i in range(reward_pool.size[0]):
-            loss -= prob_pool[i]*reward_pool[i] #为啥是减'''
-        '''loss=0.
-        prob_pool = torch.tensor(prob_pool,dtype=torch.float32)
-        loss = -sum(np.log(prob_pool)*reward_pool)'''
-        loss = self.loss_fun(prob_pool, reward_pool)
+            if epoch % self.config.batch_size == 0:  # 更新
+                self.env.render()
+                self.agent.update(prob_pool, reward_pool)
+                prob_pool, reward_pool = [], []  # state_pool.clear(); action_pool.clear();
 
-        # 反向传播
-        self.optimizer.zero_grad()
-        loss.requires_grad = True  # https://blog.csdn.net/wu_xin1/article/details/116502378
-        loss.backward()
-        self.optimizer.step()
+        print("训练完毕！")
 
-    def save(self, path):
-        torch.save(self.net.state_dict(), path)
+        # 保存训练参数
+        if self.config.save_param:
+            self.agent.save(self.config.save_param)
+
+        return rewards, ma_rewards
+
+    def test(self):
+        # 输出测试结果
+        state = self.env.reset()
+        best_state, best_reward = state, 0
+        for iter in range(self.config.max_iter):
+            action, prob = self.agent.choose_action(state)
+            nxt_state, reward = self.env.step(action)
+            state = nxt_state
+
+            if reward > best_reward:
+                best_reward = reward
+                best_state = nxt_state
+        self.env.state = best_state
+        # env.render(os.path.join(config.save_model),'best_divide.png')
+        # print('best reward is ',best_reward)
+
+    def save(self):
+        self.agent.save(self.config.save_param)
+
+    def load(self):
+        self.agent.load(self.config.init_param)
+
+    def plot_rewards(rewards, ma_rewards, path):
+        fig = plt.figure(1, figsize=[16, 10])
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax1.set_title('reward')
+        ax1.plot(rewards)
+
+        ax2 = fig.add_subplot(2, 1, 2)  # 第2行第1列
+        ax2.set_title('ma_reward')
+        ax2.plot(ma_rewards)
+
+        plt.show()
+        plt.savefig(os.path.join(path, 'reward.png'))
