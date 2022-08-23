@@ -2,3 +2,13 @@ data/
 .idea/
 __pycache__/
 save_model/
+*.zip
+*.rar
+*.7z
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.npy
+*.csv
+*.exe
